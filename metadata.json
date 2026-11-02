@@ -1,0 +1,6 @@
+{
+  "name": "rwnd20s. — Y2K Hardware & Chrome Archive",
+  "description": "Dark-luxury Y2K hardware and accessories e-commerce storefront featuring brushed steel chronographs, wired chrome IEM earphones, heavy 316L stainless steel rings, chains, and industrial bracelets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
