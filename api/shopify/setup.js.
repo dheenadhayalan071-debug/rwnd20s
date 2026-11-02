@@ -1,0 +1,134 @@
+
+import { timingSafeEqual } from "node:crypto";
+
+export default async function handler(req, res) {
+  res.setHeader("Cache-Control", "no-store");
+
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  // Protect this temporary setup endpoint.
+  const supplied = req.headers["x-setup-secret"] || "";
+  const expected = process.env.SHOPIFY_SETUP_SECRET || "";
+
+  const a = Buffer.from(String(supplied));
+  const b = Buffer.from(String(expected));
+
+  if (!expected || a.length !== b.length ||
+      !timingSafeEqual(a, b)) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const domain = process.env.SHOPIFY_STORE_DOMAIN;
+  const clientId = process.env.SHOPIFY_CLIENT_ID;
+  const clientSecret = process.env.SHOPIFY_CLIENT_SECRET;
+  const version = process.env.SHOPIFY_API_VERSION || "2026-10";
+
+  if (!domain || !clientId || !clientSecret) {
+    return res.status(500).json({
+      error: "Missing Shopify environment variables"
+    });
+  }
+
+  if (!/^[a-zA-Z0-9-]+\.myshopify\.com$/.test(domain)) {
+    return res.status(500).json({ error: "Invalid store domain" });
+  }
+
+  try {
+    // 1. Request a temporary Admin API access token.
+    const authResponse = await fetch(
+      `https://${domain}/admin/oauth/access_token`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json"
+        },
+        body: new URLSearchParams({
+          grant_type: "client_credentials",
+          client_id: clientId,
+          client_secret: clientSecret
+        })
+      }
+    );
+
+    const authData = await authResponse.json();
+
+    if (!authResponse.ok || !authData.access_token) {
+      return res.status(502).json({
+        error: "Shopify Admin authentication failed",
+        details: authData.error_description || authData.error || "Check app organization and credentials"
+      });
+    }
+
+    // 2. Create the public Storefront API token.
+    const mutation = `
+      mutation StorefrontTokenCreate($input: StorefrontAccessTokenInput!) {
+        storefrontAccessTokenCreate(input: $input) {
+          storefrontAccessToken {
+            accessToken
+            title
+            accessScopes {
+              handle
+            }
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+
+    const graphResponse = await fetch(
+      `https://${domain}/admin/api/${version}/graphql.json`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": authData.access_token
+        },
+        body: JSON.stringify({
+          query: mutation,
+          variables: {
+            input: { title: "RWND20s Vercel Storefront" }
+          }
+        })
+      }
+    );
+
+    const graphData = await graphResponse.json();
+
+    if (!graphResponse.ok || graphData.errors) {
+      return res.status(502).json({
+        error: "Storefront token creation failed",
+        details: graphData.errors || "Check Admin API permissions"
+      });
+    }
+
+    const result = graphData.data?.storefrontAccessTokenCreate;
+
+    if (!result?.storefrontAccessToken || result.userErrors?.length) {
+      return res.status(400).json({
+        error: "Shopify rejected Storefront token creation",
+        details: result?.userErrors || []
+      });
+    }
+
+    // Never return or log the Admin API token.
+    return res.status(200).json({
+      success: true,
+      title: result.storefrontAccessToken.title,
+      storefrontAccessToken: result.storefrontAccessToken.accessToken,
+      scopes: result.storefrontAccessToken.accessScopes.map(
+        scope => scope.handle
+      )
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      error: "Server error while connecting to Shopify"
+    });
+  }
+}
