@@ -19,7 +19,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = 3000;
-const SHOPIFY_API_VERSION = '2024-10';
+const SHOPIFY_API_VERSION = '2026-10';
 
 function getShopifyCredentials() {
   const rawDomain =
@@ -30,6 +30,7 @@ function getShopifyCredentials() {
 
   const storefrontToken = (
     process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN ||
+    process.env.VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN ||
     process.env.VITE_SHOPIFY_STOREFRONT_TOKEN ||
     ''
   ).trim();

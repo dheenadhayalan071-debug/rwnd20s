@@ -320,18 +320,17 @@ export const ShopifyConnectModal: React.FC<ShopifyConnectModalProps> = ({
           <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-[#09090B]/15 bg-white p-4 shadow-xs">
               <span className="font-mono-tech text-[10px] font-bold tracking-widest text-[#52525B] uppercase">
-                STEP 1 · AI STUDIO ENVIRONMENT SECRETS
+                STEP 1 · SHOPIFY STOREFRONT &amp; SERVER ENV KEYS
               </span>
               <p className="mt-1 text-xs text-[#27272A]">
-                Add these keys in the AI Studio Environment / Secrets panel
-                (server proxy <code>/api/shopify/*</code> reads them
-                automatically):
+                Add these keys in Vercel / AI Studio Environment Variables
+                (Storefront API <code>2026-10</code> &amp; <code>/api/shopify/*</code>):
               </p>
               <div className="mt-2.5 space-y-1.5 font-mono-tech text-[11px]">
                 {[
+                  'VITE_SHOPIFY_STORE_DOMAIN',
+                  'VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN',
                   'SHOPIFY_STORE_DOMAIN',
-                  'SHOPIFY_STOREFRONT_ACCESS_TOKEN',
-                  'SHOPIFY_ADMIN_ACCESS_TOKEN',
                 ].map((envKey) => (
                   <div
                     key={envKey}

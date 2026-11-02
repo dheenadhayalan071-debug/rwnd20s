@@ -343,3 +343,61 @@ test('Shopify integration helpers normalize domains, generate official Products 
     'https://rwnd20s.myshopify.com/cart/4411223344:1,9988776655:2?discount=RWND5NOW'
   );
 });
+
+test('api/shopify/auth.js enforces POST, builds x-www-form-urlencoded payload, and never exposes access_token', async () => {
+  const {
+    default: handler,
+    sanitizeStoreDomain,
+    buildTokenRequestBody,
+    sanitizeShopifyTokenResponse,
+  } = await import('../../api/shopify/auth.js');
+
+  assert.equal(sanitizeStoreDomain('https://x530k-qs.myshopify.com/admin'), 'x530k-qs.myshopify.com');
+  assert.equal(sanitizeStoreDomain('evil.example.com'), null);
+
+  const body = buildTokenRequestBody('my_client_id', 'my_client_secret');
+  assert.equal(
+    body,
+    'grant_type=client_credentials&client_id=my_client_id&client_secret=my_client_secret'
+  );
+
+  const sanitized = sanitizeShopifyTokenResponse(
+    {
+      access_token: 'shpat_secret_never_expose_12345',
+      scope: 'read_products,write_orders',
+      expires_in: 86399,
+    },
+    1700000000000
+  );
+  assert.equal(sanitized.authenticated, true);
+  assert.equal(sanitized.expiresIn, 86399);
+  assert.equal(sanitized.scope, 'read_products,write_orders');
+  assert.deepEqual(sanitized.scopes, ['read_products', 'write_orders']);
+  assert.equal('access_token' in sanitized, false);
+  assert.equal(JSON.stringify(sanitized).includes('shpat_secret_never_expose_12345'), false);
+
+  // Verify GET is rejected with 405
+  let statusResult = 0;
+  let jsonResult: Record<string, unknown> = {};
+  const headers: Record<string, string> = {};
+  await handler(
+    { method: 'GET' } as never,
+    {
+      setHeader(k: string, v: string) {
+        headers[k] = v;
+      },
+      status(code: number) {
+        statusResult = code;
+        return {
+          json(payload: Record<string, unknown>) {
+            jsonResult = payload;
+          },
+        };
+      },
+    } as never
+  );
+  assert.equal(statusResult, 405);
+  assert.equal(headers.Allow, 'POST');
+  assert.equal(jsonResult.authenticated, false);
+});
+

@@ -6,16 +6,19 @@ import {
 import { buildHardwareStudioSet } from '../utils/studioSvgAssets';
 
 const SHOPIFY_STORE_DOMAIN =
-  (import.meta.env?.VITE_SHOPIFY_STORE_DOMAIN as string | undefined)?.trim() ||
-  '';
-const SHOPIFY_STOREFRONT_TOKEN =
+  (import.meta.env?.VITE_SHOPIFY_STORE_DOMAIN as string | undefined)
+    ?.trim()
+    .replace(/^https?:\/\//i, '')
+    .replace(/\/.*$/, '') || '';
+const SHOPIFY_STOREFRONT_ACCESS_TOKEN =
   (
-    import.meta.env?.VITE_SHOPIFY_STOREFRONT_TOKEN as string | undefined
+    (import.meta.env?.VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN ||
+      import.meta.env?.VITE_SHOPIFY_STOREFRONT_TOKEN) as string | undefined
   )?.trim() || '';
 
 export const isShopifyConfigured = Boolean(
   SHOPIFY_STORE_DOMAIN &&
-    SHOPIFY_STOREFRONT_TOKEN &&
+    SHOPIFY_STOREFRONT_ACCESS_TOKEN &&
     SHOPIFY_STORE_DOMAIN !== 'MY_SHOPIFY_STORE_DOMAIN'
 );
 
@@ -468,27 +471,54 @@ export const LOCAL_ARCHIVE_PRODUCTS: Product[] = [
   },
 ];
 
-const GRAPHQL_ENDPOINT = SHOPIFY_STORE_DOMAIN
-  ? `https://${SHOPIFY_STORE_DOMAIN}/api/2024-10/graphql.json`
-  : '';
+export const SHOP_AND_PRODUCTS_STATUS_QUERY = `
+  query GetShopAndProductCount {
+    shop {
+      name
+      primaryDomain {
+        url
+        host
+      }
+      paymentSettings {
+        currencyCode
+      }
+    }
+    products(first: 25) {
+      edges {
+        node {
+          id
+        }
+      }
+    }
+  }
+`;
 
-async function shopifyGraphqlRequest<T>(
+export async function shopifyGraphqlRequest<T>(
   query: string,
-  variables: Record<string, unknown> = {}
+  variables?: Record<string, unknown>
 ): Promise<T | null> {
-  if (!isShopifyConfigured || !GRAPHQL_ENDPOINT) {
+  if (!isShopifyConfigured) {
     return null;
   }
 
   try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Shopify-Storefront-Access-Token': SHOPIFY_STOREFRONT_TOKEN,
-      },
-      body: JSON.stringify({ query, variables }),
-    });
+    const response = await fetch(
+      `https://${import.meta.env.VITE_SHOPIFY_STORE_DOMAIN}/api/2026-10/graphql.json`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Storefront-Access-Token":
+            import.meta.env.VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN ||
+            SHOPIFY_STOREFRONT_ACCESS_TOKEN,
+        },
+        body: JSON.stringify(
+          variables && Object.keys(variables).length > 0
+            ? { query, variables }
+            : { query }
+        ),
+      }
+    );
 
     if (!response.ok) {
       return null;
@@ -571,6 +601,7 @@ export const ALL_PRODUCTS_QUERY = `
               node {
                 id
                 title
+                sku
                 availableForSale
                 price {
                   amount
@@ -605,10 +636,46 @@ export interface ShopifyConnectionStatus {
 }
 
 export async function fetchShopifyConnectionStatus(): Promise<ShopifyConnectionStatus> {
+  // 1. If frontend Storefront API credentials (VITE_SHOPIFY_STORE_DOMAIN + VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN) are set, verify live Storefront connection directly
+  if (isShopifyConfigured) {
+    const data = await shopifyGraphqlRequest<{
+      shop?: {
+        name?: string;
+        primaryDomain?: { url?: string; host?: string };
+        paymentSettings?: { currencyCode?: string };
+      };
+      products?: { edges?: { node: { id: string } }[] };
+    }>(SHOP_AND_PRODUCTS_STATUS_QUERY);
+
+    if (data?.shop) {
+      const remoteCount = data.products?.edges?.length || 0;
+      return {
+        connected: true,
+        mode: 'shopify-live',
+        storeDomain: SHOPIFY_STORE_DOMAIN,
+        shopName: data.shop.name || SHOPIFY_STORE_DOMAIN,
+        currencyCode: data.shop.paymentSettings?.currencyCode || 'INR',
+        productCount:
+          remoteCount > 0 ? remoteCount : LOCAL_ARCHIVE_PRODUCTS.length,
+        remoteProductCount: remoteCount,
+        storefrontConnected: true,
+        adminSyncAvailable: false,
+        message:
+          remoteCount > 0
+            ? `Connected to ${data.shop.name} via Storefront API 2026-10 (${remoteCount} live products synced).`
+            : `Connected to ${data.shop.name} via Storefront API 2026-10. Store has 0 published products—import the CSV or push drops to populate your catalog.`,
+      };
+    }
+  }
+
+  // 2. Check server-side Shopify status endpoint (/api/shopify/status)
   try {
     const resp = await fetch('/api/shopify/status');
     if (resp.ok) {
-      return (await resp.json()) as ShopifyConnectionStatus;
+      const serverStatus = (await resp.json()) as ShopifyConnectionStatus;
+      if (serverStatus.connected || !isShopifyConfigured) {
+        return serverStatus;
+      }
     }
   } catch {
     // Fallback if server endpoint is unreachable
@@ -624,8 +691,8 @@ export async function fetchShopifyConnectionStatus(): Promise<ShopifyConnectionS
     storefrontConnected: isShopifyConfigured,
     adminSyncAvailable: false,
     message: isShopifyConfigured
-      ? `Connected to ${SHOPIFY_STORE_DOMAIN}.`
-      : 'Running on the built-in 7-drop RWND20s Archive Catalog. Configure SHOPIFY_STORE_DOMAIN and SHOPIFY_STOREFRONT_ACCESS_TOKEN in AI Studio Secrets to connect your live Shopify store.',
+      ? `Configured for ${SHOPIFY_STORE_DOMAIN} (API 2026-10).`
+      : 'Running on the built-in 7-drop RWND20s Archive Catalog. Set VITE_SHOPIFY_STORE_DOMAIN and VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN to connect your live Shopify store.',
   };
 }
 
@@ -654,128 +721,134 @@ export async function syncCatalogToShopify(): Promise<ShopifySyncCatalogResponse
   }
 }
 
-export async function fetchLiveOrFallbackCatalog(): Promise<Product[]> {
-  // 1. Try server-side Shopify proxy endpoint first (/api/shopify/products)
-  try {
-    const apiResp = await fetch('/api/shopify/products');
-    if (apiResp.ok) {
-      const payload = (await apiResp.json()) as {
-        source?: string;
-        products?: Product[];
+interface ShopifyProductNode {
+  id: string;
+  title: string;
+  handle: string;
+  productType?: string;
+  description?: string;
+  tags?: string[];
+  images?: { edges?: { node: { url: string } }[] };
+  variants?: {
+    edges?: {
+      node: {
+        id: string;
+        title: string;
+        sku?: string;
+        availableForSale: boolean;
+        price?: { amount: string };
+        compareAtPrice?: { amount: string };
       };
-      if (Array.isArray(payload.products) && payload.products.length > 0) {
-        return payload.products;
-      }
-    }
-  } catch {
-    // Fall back to direct client-side Storefront API or local catalog
-  }
+    }[];
+  };
+}
 
-  if (!isShopifyConfigured) {
-    return LOCAL_ARCHIVE_PRODUCTS;
-  }
-
-  interface ShopifyProductNode {
-    id: string;
-    title: string;
-    handle: string;
-    productType?: string;
-    description?: string;
-    tags?: string[];
-    images?: { edges?: { node: { url: string } }[] };
-    variants?: {
-      edges?: {
-        node: {
-          id: string;
-          title: string;
-          availableForSale: boolean;
-          price?: { amount: string };
-          compareAtPrice?: { amount: string };
-        };
-      }[];
-    };
-  }
-
-  const data = await shopifyGraphqlRequest<{
-    products?: { edges?: { node: ShopifyProductNode }[] };
-  }>(ALL_PRODUCTS_QUERY);
-
-  const edges = data?.products?.edges;
-  if (!edges || edges.length === 0) {
-    return LOCAL_ARCHIVE_PRODUCTS;
-  }
+function mapShopifyNodesToProducts(
+  edges: { node: ShopifyProductNode }[]
+): Product[] {
+  const categoryLabels: Record<
+    Exclude<CategoryHandle, 'all' | 'everyday-drop' | 'premium-drop'>,
+    string
+  > = {
+    'cyber-bundle': '3-PC CYBER SET',
+    watches: 'WATCHES',
+    'chrome-earphones': 'CHROME EARPHONES',
+    'y2k-rings': 'Y2K RINGS',
+    chains: 'CHAINS',
+    bracelets: 'BRACELETS',
+    earrings: 'EARRINGS',
+  };
 
   return edges.map(({ node }, idx) => {
+    const cleanHandle = `/products/${node.handle}`;
     const firstVar = node.variants?.edges?.[0]?.node;
-    const basePrice = Math.round(Number(firstVar?.price?.amount || 549));
-    const compareAt = Math.round(
-      Number(firstVar?.compareAtPrice?.amount || Math.round(basePrice * 2))
+    const matchedLocal = LOCAL_ARCHIVE_PRODUCTS.find(
+      (local) =>
+        local.handle.toLowerCase() === cleanHandle.toLowerCase() ||
+        (firstVar?.sku &&
+          firstVar.sku.toUpperCase().startsWith(local.sku.toUpperCase())) ||
+        local.title.toLowerCase() === node.title.toLowerCase()
     );
-    const rawType = (node.productType || node.handle || '').toLowerCase();
+
+    const basePrice = Math.round(
+      Number(firstVar?.price?.amount || matchedLocal?.price || 549)
+    );
+    const compareAt = Math.round(
+      Number(
+        firstVar?.compareAtPrice?.amount ||
+          matchedLocal?.compareAtPrice ||
+          Math.round(basePrice * 2)
+      )
+    );
+    const rawType = (
+      node.productType ||
+      node.handle ||
+      matchedLocal?.category ||
+      ''
+    ).toLowerCase();
+
     let category: Exclude<
       CategoryHandle,
       'all' | 'everyday-drop' | 'premium-drop'
-    > = 'y2k-rings';
-    if (rawType.includes('bundle') || rawType.includes('set')) {
-      category = 'cyber-bundle';
-    } else if (rawType.includes('watch')) {
-      category = 'watches';
-    } else if (rawType.includes('earphone') || rawType.includes('audio')) {
-      category = 'chrome-earphones';
-    } else if (rawType.includes('earring') || rawType.includes('stud')) {
-      category = 'earrings';
-    } else if (rawType.includes('chain') || rawType.includes('neck')) {
-      category = 'chains';
-    } else if (rawType.includes('bracelet') || rawType.includes('cuff')) {
-      category = 'bracelets';
-    }
+    > = matchedLocal?.category || 'y2k-rings';
 
-    const categoryLabels: Record<
-      Exclude<CategoryHandle, 'all' | 'everyday-drop' | 'premium-drop'>,
-      string
-    > = {
-      'cyber-bundle': '3-PC CYBER SET',
-      watches: 'WATCHES',
-      'chrome-earphones': 'CHROME EARPHONES',
-      'y2k-rings': 'Y2K RINGS',
-      chains: 'CHAINS',
-      bracelets: 'BRACELETS',
-      earrings: 'EARRINGS',
-    };
+    if (!matchedLocal) {
+      if (rawType.includes('bundle') || rawType.includes('set')) {
+        category = 'cyber-bundle';
+      } else if (rawType.includes('watch')) {
+        category = 'watches';
+      } else if (rawType.includes('earphone') || rawType.includes('audio')) {
+        category = 'chrome-earphones';
+      } else if (rawType.includes('earring') || rawType.includes('stud')) {
+        category = 'earrings';
+      } else if (rawType.includes('chain') || rawType.includes('neck')) {
+        category = 'chains';
+      } else if (rawType.includes('bracelet') || rawType.includes('cuff')) {
+        category = 'bracelets';
+      }
+    }
 
     const imgs =
       node.images?.edges?.map((e) => e.node.url).filter(Boolean) || [];
 
-    const tags = node.tags || [];
+    const tags =
+      node.tags && node.tags.length > 0
+        ? node.tags
+        : matchedLocal?.tags || [];
     const dropCollection = tags.includes('premium-drop')
       ? 'premium-drop'
-      : 'everyday-drop';
+      : matchedLocal?.dropCollection || 'everyday-drop';
 
     return {
+      ...(matchedLocal || {}),
       id: node.id,
-      sku: `RW-0${idx + 1}`,
-      handle: `/products/${node.handle}`,
+      sku: matchedLocal?.sku || firstVar?.sku || `RW-0${idx + 1}`,
+      handle: cleanHandle,
       title: node.title.toUpperCase(),
-      subtitle: node.productType || 'RWND20s Y2K Hardware',
+      subtitle:
+        matchedLocal?.subtitle || node.productType || 'RWND20s Y2K Hardware',
       category,
       categoryLabel: categoryLabels[category],
       dropCollection,
-      phase: 1,
-      phaseStatus: 'LIVE DROP',
+      phase: matchedLocal?.phase || 1,
+      phaseStatus: matchedLocal?.phaseStatus || 'LIVE DROP',
       price: basePrice,
       compareAtPrice:
-        compareAt > basePrice ? compareAt : Math.round(basePrice * 2),
-      specBadge: 'BESTSELLER',
+        compareAt > basePrice
+          ? compareAt
+          : matchedLocal?.compareAtPrice || Math.round(basePrice * 2),
+      specBadge: matchedLocal?.specBadge || 'BESTSELLER',
       description:
         node.description ||
+        matchedLocal?.description ||
         'Y2K hardware from the RWND20s archive. Ships across India with COD or prepaid.',
       tags,
       vendor: 'RWND20s',
-      specs: [
+      specs: matchedLocal?.specs || [
         { label: 'Brand', value: 'rwnd20s.' },
         { label: 'Edition', value: 'Drop 01 Archive' },
       ],
-      optionName: 'Variant',
+      optionName: matchedLocal?.optionName || 'Variant',
       variants:
         node.variants?.edges?.map((v) => ({
           id: v.node.id,
@@ -790,10 +863,47 @@ export async function fetchLiveOrFallbackCatalog(): Promise<Product[]> {
       images:
         imgs.length > 0
           ? imgs
-          : LOCAL_ARCHIVE_PRODUCTS[idx % LOCAL_ARCHIVE_PRODUCTS.length].images,
-      featuredRank: idx + 1,
+          : matchedLocal?.images ||
+            LOCAL_ARCHIVE_PRODUCTS[idx % LOCAL_ARCHIVE_PRODUCTS.length].images,
+      featuredRank: matchedLocal?.featuredRank ?? idx + 1,
     };
   });
+}
+
+export async function fetchLiveOrFallbackCatalog(): Promise<Product[]> {
+  // 1. Direct Frontend Shopify Storefront API 2026-10 query using VITE_SHOPIFY_STORE_DOMAIN & VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN
+  if (isShopifyConfigured) {
+    const data = await shopifyGraphqlRequest<{
+      products?: { edges?: { node: ShopifyProductNode }[] };
+    }>(ALL_PRODUCTS_QUERY);
+
+    const edges = data?.products?.edges;
+    if (edges && edges.length > 0) {
+      return mapShopifyNodesToProducts(edges);
+    }
+  }
+
+  // 2. Try server-side Shopify proxy endpoint (/api/shopify/products) if it has live Shopify Storefront products
+  try {
+    const apiResp = await fetch('/api/shopify/products');
+    if (apiResp.ok) {
+      const payload = (await apiResp.json()) as {
+        source?: string;
+        products?: Product[];
+      };
+      if (
+        payload.source === 'shopify-storefront' &&
+        Array.isArray(payload.products) &&
+        payload.products.length > 0
+      ) {
+        return payload.products;
+      }
+    }
+  } catch {
+    // Fall back to local archive catalog below
+  }
+
+  return LOCAL_ARCHIVE_PRODUCTS;
 }
 
 export async function fetchProductsByCollectionHandle(
@@ -836,37 +946,7 @@ export async function createShopifyCheckout(
 ): Promise<CheckoutResult> {
   const referenceId = `RWND-${Math.floor(100000 + Math.random() * 900000)}`;
 
-  // 1. Try server-side Shopify checkout proxy (/api/shopify/checkout)
-  if (cartItems.length > 0) {
-    try {
-      const apiResp = await fetch('/api/shopify/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: cartItems.map((item) => ({
-            variantId: item.selectedVariant.id,
-            title: item.product.title,
-            variantLabel: item.selectedVariant.label,
-            unitPrice: item.unitPrice,
-            quantity: item.quantity,
-          })),
-          welcomeDiscountCode: options.welcomeDiscountCode || null,
-          customerEmail: options.customerEmail || null,
-          paymentMethod: options.paymentMethod || 'prepaid',
-        }),
-      });
-
-      if (apiResp.ok) {
-        const result = (await apiResp.json()) as CheckoutResult;
-        if (result.mode === 'shopify-live' && result.checkoutUrl) {
-          return result;
-        }
-      }
-    } catch {
-      // Fall back to direct Storefront API or local preview below
-    }
-  }
-
+  // 1. Direct Frontend Shopify Storefront API 2026-10 cartCreate when configured
   if (isShopifyConfigured && cartItems.length > 0) {
     const lines = cartItems.map((item) => ({
       merchandiseId: item.selectedVariant.id,
@@ -901,6 +981,37 @@ export async function createShopifyCheckout(
     }
   }
 
+  // 2. Try server-side Shopify checkout proxy (/api/shopify/checkout)
+  if (cartItems.length > 0) {
+    try {
+      const apiResp = await fetch('/api/shopify/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: cartItems.map((item) => ({
+            variantId: item.selectedVariant.id,
+            title: item.product.title,
+            variantLabel: item.selectedVariant.label,
+            unitPrice: item.unitPrice,
+            quantity: item.quantity,
+          })),
+          welcomeDiscountCode: options.welcomeDiscountCode || null,
+          customerEmail: options.customerEmail || null,
+          paymentMethod: options.paymentMethod || 'prepaid',
+        }),
+      });
+
+      if (apiResp.ok) {
+        const result = (await apiResp.json()) as CheckoutResult;
+        if (result.mode === 'shopify-live' && result.checkoutUrl) {
+          return result;
+        }
+      }
+    } catch {
+      // Fall back to local preview below
+    }
+  }
+
   return {
     mode: 'local-preview',
     checkoutUrl: null,
@@ -908,4 +1019,5 @@ export async function createShopifyCheckout(
     discountApplied: options.welcomeDiscountCode || null,
   };
 }
+
 
