@@ -5,10 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build",
-    "start": "NODE_ENV=production tsx server.ts",
-    "preview": "vite preview",
-    "clean": "rm -rf dist server.js",
+    "build": "tsx server.ts --validate",
+    "start": "node server.ts",
+    "test": "tsx --test server.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
