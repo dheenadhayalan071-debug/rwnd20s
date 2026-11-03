@@ -324,18 +324,16 @@ document.addEventListener('DOMContentLoaded', () => {
         })
       });
 
-      if (response.ok) {
-        await fetchCartState();
-        openCartDrawer('bag');
-        showToast('ADDED TO HARDWARE BAG', 'Artifact synced with Shopify Cart.');
-      } else {
-        openCartDrawer('bag');
-        showToast('BAG UPDATED', 'Artifact added to bag preview.');
-      }
-    } catch {
-      openCartDrawer('bag');
+                if (response.ok) {
+      await fetchCartState();
+      showToast('ADDED TO HARDWARE BAG', 'Artifact synced with Shopify Cart.');
+    } else {
       showToast('BAG UPDATED', 'Artifact added to bag preview.');
     }
+
+  } catch {
+    showToast('BAG UPDATED', 'Artifact added to bag preview.');
+  }
   }
 
   async function updateShopifyCartItem(lineKey, quantity) {
