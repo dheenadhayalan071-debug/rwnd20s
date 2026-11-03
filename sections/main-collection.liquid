@@ -1,0 +1,110 @@
+<!-- sections/main-collection.liquid -->
+<section class="metallic-chrome-bg py-12 sm:py-16">
+  <div class="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8">
+    <div class="border-b border-black/15 pb-6">
+      <p class="font-mono-tech text-xs font-bold tracking-widest text-[#3F3F46] uppercase">
+        RWND20S. ARCHIVE COLLECTION
+      </p>
+      <h1 class="mt-1 font-display text-3xl font-extrabold tracking-tight text-[#09090B] uppercase sm:text-4xl">
+        {{ collection.title | default: 'ALL HARDWARE ARTIFACTS' }}
+      </h1>
+      {% if collection.description != blank %}
+        <div class="mt-2 max-w-2xl text-sm text-[#27272A]">
+          {{ collection.description }}
+        </div>
+      {% endif %}
+    </div>
+
+    {% paginate collection.products by section.settings.products_per_page %}
+      <div class="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {% for product in collection.products %}
+          {% assign default_variant = product.selected_or_first_available_variant %}
+          <article
+            data-product-card
+            data-handle="{{ product.handle }}"
+            data-title="{{ product.title | escape }}"
+            data-category="{{ product.type | downcase }}"
+            data-tags="{{ product.tags | join: ',' | downcase }}"
+            data-price="{{ product.price }}"
+            data-price-formatted="{{ product.price | money }}"
+            data-compare-formatted="{{ product.compare_at_price | money }}"
+            data-image="{{ product.featured_image | image_url: width: 800 }}"
+            data-variant-id="{{ default_variant.id }}"
+            data-url="{{ product.url }}"
+            class="group flex flex-col justify-between overflow-hidden rounded-2xl border border-black/15 bg-white p-5 shadow-sm transition-all hover:border-[#09090B]"
+          >
+            <a href="{{ product.url }}" class="block aspect-square w-full overflow-hidden rounded-xl bg-[#D4D8E0] p-4">
+              {% if product.featured_image %}
+                <img
+                  src="{{ product.featured_image | image_url: width: 800 }}"
+                  alt="{{ product.title | escape }}"
+                  loading="lazy"
+                  class="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
+                >
+              {% endif %}
+            </a>
+
+            <div class="mt-4">
+              <h2 class="font-display text-lg font-extrabold text-[#09090B] uppercase">
+                <a href="{{ product.url }}">{{ product.title }}</a>
+              </h2>
+              <div class="mt-2 flex items-baseline gap-2">
+                <span class="font-mono-tech text-lg font-bold text-[#09090B]">{{ product.price | money }}</span>
+                {% if product.compare_at_price > product.price %}
+                  <span class="font-mono-tech text-xs text-[#52525B] line-through">{{ product.compare_at_price | money }}</span>
+                {% endif %}
+              </div>
+              <button
+                type="button"
+                data-add-to-cart
+                variant-id="{{ default_variant.id }}"
+                class="mt-4 w-full rounded-full border border-black bg-[#09090B] py-3 font-mono-tech text-xs font-bold tracking-wider text-white uppercase transition-colors hover:bg-white hover:text-[#09090B] cursor-pointer"
+              >
+                {{ 'products.product.add_to_cart' | t }}
+              </button>
+            </div>
+          </article>
+        {% else %}
+          <div class="col-span-full rounded-3xl border border-black/15 bg-white p-12 text-center">
+            <p class="font-display text-xl font-bold text-[#09090B] uppercase">NO ARTIFACTS IN THIS COLLECTION YET</p>
+            <p class="mt-2 text-xs text-[#3F3F46]">Upload products in Shopify Admin to populate this collection view.</p>
+          </div>
+        {% endfor %}
+      </div>
+
+      {% if paginate.pages > 1 %}
+        <div class="mt-10 flex justify-center font-mono-tech text-xs font-bold text-[#09090B]">
+          {{ paginate | default_pagination }}
+        </div>
+      {% endif %}
+    {% endpaginate %}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Main Collection Grid",
+  "settings": [
+    {
+      "type": "range",
+      "id": "products_per_page",
+      "min": 6,
+      "max": 48,
+      "step": 6,
+      "label": "Products per page",
+      "default": 24
+    },
+    {
+      "type": "checkbox",
+      "id": "show_category_tabs",
+      "label": "Show Category Tabs",
+      "default": true
+    }
+  ],
+  "presets": [
+    {
+      "name": "Main Collection Grid"
+    }
+  ]
+}
+{% endschema %}
