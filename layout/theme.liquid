@@ -34,7 +34,7 @@
             fontFamily: {
               display: ['Syne', 'Plus Jakarta Sans', 'sans-serif'],
               editorial: ['Playfair Display', 'Georgia', 'serif'],
-              sans: ['Plus Jakarta Sans', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+              sans: ['Plus Jakarta Sans', '-apple-system', BlinkMacSystemFont, 'sans-serif'],
               'mono-tech': ['JetBrains Mono', 'monospace']
             },
             colors: {
@@ -57,6 +57,10 @@
   </head>
 
   <body class="metallic-chrome-bg min-h-screen text-[#09090B] antialiased selection:bg-[#09090B] selection:text-white">
+
+    <!-- Immersive Gothic 3D WebGL Cinematic Intro -->
+    {% render 'gothic-intro' %}
+
     {% if settings.enable_crt_flicker != false %}
       <!-- Global High-Frequency CRT Brightness Flicker Overlay -->
       <div aria-hidden="true" data-testid="crt-flicker-overlay" class="crt-flicker-overlay fixed inset-0 z-[55]"></div>
