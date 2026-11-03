@@ -59,7 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 650);
   }
 
-  /* ==========================================================================
+/* ==========================================================================
    * 3. WELCOME OFFER POPUP (5% OFF NOW + 10% OFF NEXT PURCHASE)
    * ========================================================================== */
   const welcomePopup = document.getElementById('rwnd-welcome-popup');
@@ -103,10 +103,14 @@ document.addEventListener('DOMContentLoaded', () => {
     welcomePopup.classList.remove('flex');
   }
 
+  // Ensure popup triggers on load if no offer exists yet
   if (welcomePopup) {
     const existingOffer = getSavedWelcomeOffer();
     if (!existingOffer) {
-      openWelcomePopup();
+      // Small delay ensures Shopify DOM elements are fully painted before opening
+      setTimeout(() => {
+        openWelcomePopup();
+      }, 400);
     } else {
       syncWelcomeOfferUI();
     }
@@ -119,7 +123,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   welcomeForm?.addEventListener('submit', (e) => {
     e.preventDefault();
-    const emailInput = document.getElementById('welcome-offer-email');
+    // Fallback query selector to catch the input whether its ID is 'welcome-offer-email' or 'rwnd-welcome-email-input'
+    const emailInput = document.getElementById('welcome-offer-email') || document.getElementById('rwnd-welcome-email-input');
     const email = (emailInput?.value || '').trim().toLowerCase();
     const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -145,13 +150,12 @@ document.addEventListener('DOMContentLoaded', () => {
       // ignore storage errors
     }
     syncWelcomeOfferUI();
-    fetchCartState();
+    if (typeof fetchCartState === 'function') fetchCartState();
     showToast(
       '5% + 10% ARCHIVE PASS UNLOCKED',
       `5% OFF applied (RWND5NOW) + 10% next order (RWND10NEXT) for ${email}.`
     );
   });
-
   /* ==========================================================================
    * 4. SHOPIFY NATIVE AJAX CART API & SLIDE-OUT DRAWER
    * ========================================================================== */
