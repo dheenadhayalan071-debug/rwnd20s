@@ -753,4 +753,4 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initial Cart Sync
   fetchCartState();
-});
+});;
