@@ -7,38 +7,33 @@
 
 body {
   font-family: var(--font-sans);
-  background-color: #DCDFE5;
-  background-image: linear-gradient(
-    135deg,
-    #E8EBF0 0%,
-    #D0D4DD 45%,
-    #E4E7ED 75%,
-    #D5D9E2 100%
+  background-color: #060606;
+  background-image: radial-gradient(
+    circle at 50% 0%,
+    rgba(255, 255, 255, 0.07) 0%,
+    transparent 55%
   );
   background-attachment: fixed;
-  color: #09090B;
-  filter: brightness(1.002) contrast(1.005);
+  color: #FFFFFF;
 }
 
-/* Metallic Chrome Clean Surface Utilities */
+/* Metallic Chrome Clean Surface Utilities (Obsidian Dark Edition) */
 .metallic-chrome-bg {
-  background-color: #DCDFE5;
-  background-image: linear-gradient(
-    135deg,
-    #EAEDF2 0%,
-    #D1D5DE 38%,
-    #E6E9EF 72%,
-    #CFD4DD 100%
+  background-color: #060606;
+  background-image: radial-gradient(
+    circle at 50% 0%,
+    rgba(255, 255, 255, 0.07) 0%,
+    transparent 55%
   );
 }
 
 .metallic-chrome-panel {
-  background-color: #E4E7EC;
+  background-color: #0F0F0F;
   background-image: linear-gradient(
     160deg,
-    rgba(255, 255, 255, 0.88) 0%,
-    rgba(220, 224, 232, 0.92) 55%,
-    rgba(244, 246, 250, 0.95) 100%
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(15, 15, 15, 0.92) 55%,
+    rgba(25, 25, 25, 0.95) 100%
   );
 }
 
@@ -58,23 +53,23 @@ body {
 .studio-spotlight {
   background: radial-gradient(
     circle at 50% 50%,
-    rgba(255, 255, 255, 0.85) 0%,
-    rgba(255, 255, 255, 0.35) 45%,
-    transparent 75%
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0.04) 45%,
+    transparent 72%
   );
 }
 
 .studio-spotlight-intense {
   background: radial-gradient(
     circle at 50% 45%,
-    rgba(255, 255, 255, 0.92) 0%,
-    rgba(255, 255, 255, 0.42) 45%,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 255, 255, 0.08) 45%,
     transparent 72%
   );
 }
 
 .chrome-text-gradient {
-  background: linear-gradient(180deg, #09090B 0%, #27272A 52%, #52525B 100%);
+  background: linear-gradient(180deg, #FFFFFF 0%, #D4D4D8 52%, #A1A1AA 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -83,55 +78,29 @@ body {
 .retro-scanlines {
   background-image: repeating-linear-gradient(
     0deg,
-    rgba(9, 9, 11, 0.04) 0px,
-    rgba(9, 9, 11, 0.04) 1px,
+    rgba(255, 255, 255, 0.02) 0px,
+    rgba(255, 255, 255, 0.02) 1px,
     transparent 1px,
     transparent 3px
   );
 }
 
 .retro-halftone-grid {
-  background-image: radial-gradient(rgba(9, 9, 11, 0.12) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
   background-size: 10px 10px;
 }
 
 .retro-window-bar {
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.92) 0%,
-    rgba(228, 231, 236, 0.75) 100%
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(15, 15, 15, 0.9) 100%
   );
 }
 
-/* Subtle High-Frequency CRT Monitor Brightness Flicker */
-@keyframes crtBrightnessFlicker {
-  0% {
-    opacity: 0.55;
-  }
-  25% {
-    opacity: 0.88;
-  }
-  50% {
-    opacity: 0.45;
-  }
-  75% {
-    opacity: 0.82;
-  }
-  100% {
-    opacity: 0.64;
-  }
-}
-
+/* Disabled CRT Flicker Overlay to Keep Product Photos Razor-Sharp */
 .crt-flicker-overlay {
-  pointer-events: none;
-  background: repeating-linear-gradient(
-    0deg,
-    rgba(255, 255, 255, 0.045) 0px,
-    rgba(9, 9, 11, 0.022) 1px,
-    transparent 2px,
-    transparent 4px
-  );
-  animation: crtBrightnessFlicker 0.12s steps(2, start) infinite;
+  display: none !important;
 }
 
 /* Classic 90s Command-Line Blinking Terminal Block Cursor */
@@ -151,8 +120,8 @@ body {
   width: 0.65em;
   height: 1.05em;
   vertical-align: text-bottom;
-  background-color: #09090B;
-  color: #09090B;
+  background-color: #FFFFFF;
+  color: #FFFFFF;
   animation: terminalCursorBlink 0.95s steps(2, start) infinite;
 }
 
@@ -215,17 +184,14 @@ body {
   animation-play-state: paused;
 }
 
-/* Custom Chrome Scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* Custom Hidden / Dark Scrollbars */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-::-webkit-scrollbar-track {
-  background: #D1D5DE;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #09090B;
-  border-radius: 9999px;
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
